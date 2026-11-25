@@ -9,7 +9,8 @@ arXiv ──► OpenAlex (citations) ──► Neo4j ◄── Question ► LLM 
 ```
 
 ## Prérequis
-Python 3.11+, Docker, et [Ollama](https://ollama.com/download).
+[Conda](https://conda.io/projects/conda/en/latest/user-guide/install/index.html), Docker,
+et [Ollama](https://ollama.com/download). L'environnement Conda installe Python 3.11.
 
 ## 1. Lancer Neo4j
 ```bash
@@ -27,11 +28,12 @@ RAM limitée ? Essaie `ollama pull llama3.2:3b` (ou un modèle `ministral`) puis
 
 ## 3. Installer et ingérer
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+conda env create -f environment.yml
+conda activate arxiv-ai-graphrag
 python -m src.ingestion.pipeline --limit 50
 ```
-Relançable à volonté : `MERGE` évite tout doublon.
+L'environnement doit être activé dans chaque nouveau terminal. Relançable à volonté :
+`MERGE` évite tout doublon.
 
 ## 4. Lancer l'interface
 ```bash
