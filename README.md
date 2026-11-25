@@ -1,7 +1,7 @@
 # ArXiv AI — Knowledge Graph & GraphRAG
 
 Explore les articles **arXiv cs.AI** sous forme de graphe (**Neo4j**) et interroge-les en
-français grâce à un **LLM local** (**Ollama + Mistral**). 100 % local, aucune API payante.
+français grâce à un **LLM local** (**Ollama + Qwen3:4b**). 100 % local, aucune API payante.
 
 ```
 arXiv ──► OpenAlex (citations) ──► Neo4j ◄── Question ► LLM ► Cypher ► Réponse
@@ -21,10 +21,9 @@ Neo4j Browser : <http://localhost:7474> (identifiants du `.env`).
 
 ## 2. Installer Ollama et un modèle léger
 ```bash
-ollama pull mistral         # ~4 Go de RAM
+ollama pull qwen3:4b
 ```
-RAM limitée ? Essaie `ollama pull llama3.2:3b` (ou un modèle `ministral`) puis change
-`OLLAMA_MODEL` dans `.env`.
+Pour utiliser un autre modèle Ollama, télécharge-le puis change `OLLAMA_MODEL` dans `.env`.
 
 ## 3. Installer et ingérer
 ```bash
