@@ -23,6 +23,11 @@ def test_clean_cypher_removes_markdown():
     assert clean_cypher(raw) == "MATCH (p:Paper) RETURN p.title LIMIT 5"
 
 
+def test_clean_cypher_removes_think_block():
+    raw = "<think>reasoning</think>MATCH (p:Paper) RETURN p.title LIMIT 5"
+    assert clean_cypher(raw) == "MATCH (p:Paper) RETURN p.title LIMIT 5"
+
+
 def test_read_only_accepts_reads():
     assert is_read_only("MATCH (p:Paper) RETURN p.title LIMIT 5")
     # 'set' in a string literal must not trigger a false positive.

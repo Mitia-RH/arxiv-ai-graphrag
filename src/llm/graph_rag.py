@@ -47,7 +47,8 @@ FORBIDDEN = re.compile(
 
 def clean_cypher(raw: str) -> str:
     """Remove Markdown ```cypher ... ``` fences and a trailing semicolon added by the model."""
-    text = re.sub(r"```(?:cypher)?", "", raw, flags=re.IGNORECASE).strip()
+    text = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+    text = re.sub(r"```(?:cypher)?", "", text, flags=re.IGNORECASE).strip()
     return text.split(";")[0].strip()
 
 

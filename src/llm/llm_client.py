@@ -1,4 +1,6 @@
 """Minimal Ollama client using its local HTTP API and `requests`."""
+import re
+
 import requests
 
 import config
@@ -11,6 +13,7 @@ def chat(system: str, user: str, temperature: float = 0.0) -> str:
         json={
             "model": config.OLLAMA_MODEL,
             "stream": False,
+            "think": False,
             "options": {"temperature": temperature},  # 0.0 is deterministic, ideal for code.
             "messages": [
                 {"role": "system", "content": system},
@@ -20,7 +23,9 @@ def chat(system: str, user: str, temperature: float = 0.0) -> str:
         timeout=300,
     )
     response.raise_for_status()
-    return response.json()["message"]["content"].strip()
+    content = response.json()["message"]["content"]
+    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL)
+    return content.strip()
 
 
 def is_available() -> bool:
