@@ -7,6 +7,7 @@ from src.ingestion.arxiv_fetcher import clean_arxiv_id
 from src.ingestion.citation_enricher import arxiv_id_from_doi
 from src.ingestion import pipeline
 from src.llm.graph_rag import clean_cypher, is_read_only
+from src.llm import llm_client
 
 
 def test_clean_arxiv_id():
@@ -29,6 +30,37 @@ def test_clean_cypher_removes_markdown():
 def test_clean_cypher_removes_think_block():
     raw = "<think>reasoning</think>MATCH (p:Paper) RETURN p.title LIMIT 5"
     assert clean_cypher(raw) == "MATCH (p:Paper) RETURN p.title LIMIT 5"
+
+
+def test_clean_cypher_removes_unbalanced_think_close():
+    raw = "reasoning that lacks an opening tag</think>MATCH (p:Paper) RETURN p.title LIMIT 5"
+    assert clean_cypher(raw) == "MATCH (p:Paper) RETURN p.title LIMIT 5"
+
+
+def test_clean_cypher_extracts_query_after_preface():
+    raw = "Here is the query:\nMATCH (p:Paper) RETURN p.title LIMIT 5;"
+    assert clean_cypher(raw) == "MATCH (p:Paper) RETURN p.title LIMIT 5"
+
+
+def test_chat_disables_thinking_and_strips_response(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"message": {"content": "reasoning</think>MATCH (p) RETURN p"}}
+
+    def fake_post(url, *, json, timeout):
+        captured["payload"] = json
+        return FakeResponse()
+
+    monkeypatch.setattr(llm_client.requests, "post", fake_post)
+
+    assert llm_client.chat("system", "user") == "MATCH (p) RETURN p"
+    assert captured["payload"]["think"] is False
+    assert captured["payload"]["messages"][0]["content"] == "system\n/no_think"
 
 
 def test_read_only_accepts_reads():

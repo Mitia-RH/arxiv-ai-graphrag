@@ -6,6 +6,14 @@ import requests
 import config
 
 
+def strip_thinking(text: str) -> str:
+    """Remove complete or unbalanced Ollama thinking markers and their content."""
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    if re.search(r"</think>", text, flags=re.IGNORECASE):
+        text = re.split(r"</think>", text, flags=re.IGNORECASE)[-1]
+    return text.strip()
+
+
 def chat(system: str, user: str, temperature: float = 0.0) -> str:
     """Send a message to Ollama and return the response text."""
     response = requests.post(
@@ -16,7 +24,7 @@ def chat(system: str, user: str, temperature: float = 0.0) -> str:
             "think": False,
             "options": {"temperature": temperature},  # 0.0 is deterministic, ideal for code.
             "messages": [
-                {"role": "system", "content": system},
+                {"role": "system", "content": f"{system}\n/no_think"},
                 {"role": "user", "content": user},
             ],
         },
@@ -24,8 +32,7 @@ def chat(system: str, user: str, temperature: float = 0.0) -> str:
     )
     response.raise_for_status()
     content = response.json()["message"]["content"]
-    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL)
-    return content.strip()
+    return strip_thinking(content)
 
 
 def is_available() -> bool:

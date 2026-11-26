@@ -7,7 +7,7 @@ import logging
 import re
 
 import config
-from src.llm.llm_client import chat
+from src.llm.llm_client import chat, strip_thinking
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +46,16 @@ FORBIDDEN = re.compile(
 
 
 def clean_cypher(raw: str) -> str:
-    """Remove Markdown ```cypher ... ``` fences and a trailing semicolon added by the model."""
-    text = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
-    text = re.sub(r"```(?:cypher)?", "", text, flags=re.IGNORECASE).strip()
-    return text.split(";")[0].strip()
+    """Extract a read-only query from the model's response."""
+    text = strip_thinking(raw)
+    text = re.sub(r"```(?:[a-zA-Z0-9_+-]+)?", "", text).strip()
+    text = re.sub(r";\s*$", "", text).strip()
+    query_start = re.search(
+        r"\b(?:OPTIONAL\s+MATCH|MATCH|WITH)\b", text, flags=re.IGNORECASE
+    )
+    if query_start:
+        text = text[query_start.start():]
+    return text.strip()
 
 
 def is_read_only(cypher: str) -> bool:
@@ -72,7 +78,9 @@ def ask(client, question: str) -> dict:
     """Ask the graph a question. Return {answer, cypher, rows, error}."""
     result = {"answer": "", "cypher": "", "rows": [], "error": None}
 
-    cypher = clean_cypher(chat(CYPHER_SYSTEM_PROMPT, f"Question: {question}"))
+    raw_output = chat(CYPHER_SYSTEM_PROMPT, f"Question: {question}")
+    logger.debug("Raw LLM output: %s", raw_output)
+    cypher = clean_cypher(raw_output)
     result["cypher"] = cypher
     if not is_read_only(cypher):
         result["error"] = "Query rejected: it is not read-only."
@@ -84,7 +92,9 @@ def ask(client, question: str) -> dict:
         logger.warning("Cypher invalide (%s), nouvelle tentative.", error)
         fix_prompt = (f"Question: {question}\nPrevious query: {cypher}\n"
                       f"Neo4j error: {error}\nFix the query.")
-        cypher = clean_cypher(chat(CYPHER_SYSTEM_PROMPT, fix_prompt))
+        raw_output = chat(CYPHER_SYSTEM_PROMPT, fix_prompt)
+        logger.debug("Raw LLM output: %s", raw_output)
+        cypher = clean_cypher(raw_output)
         result["cypher"] = cypher
         if not is_read_only(cypher):
             result["error"] = "Corrected query rejected: it is not read-only."
