@@ -18,7 +18,7 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:4b")
 ARXIV_CATEGORY = "cs.AI"                         # Fixed project scope.
 MAX_PAPERS = int(os.getenv("MAX_PAPERS", "100"))
 OPENALEX_EMAIL = os.getenv("OPENALEX_EMAIL", "")
-OPENALEX_DELAY_S = 0.2                           # pause polie entre deux appels OpenAlex
+OPENALEX_DELAY_S = 0.2                           # Polite delay between OpenAlex requests.
 
 # --- GraphRAG ---
 MAX_ROWS_FOR_LLM = 15      # Result rows passed to the LLM (small context window).

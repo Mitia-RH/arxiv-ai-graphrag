@@ -88,8 +88,8 @@ def ask(client, question: str) -> dict:
 
     try:
         rows = client.run_read(cypher)
-    except Exception as error:  # syntaxe Cypher invalide : 1 seule tentative d'auto-correction
-        logger.warning("Cypher invalide (%s), nouvelle tentative.", error)
+    except Exception as error:  # Invalid Cypher syntax: one automatic correction attempt.
+        logger.warning("Invalid Cypher (%s); retrying.", error)
         fix_prompt = (f"Question: {question}\nPrevious query: {cypher}\n"
                       f"Neo4j error: {error}\nFix the query.")
         raw_output = chat(CYPHER_SYSTEM_PROMPT, fix_prompt)

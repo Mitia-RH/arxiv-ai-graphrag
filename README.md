@@ -30,7 +30,7 @@ ollama pull qwen3:4b
 
 To use a different Ollama model, download it and update `OLLAMA_MODEL` in `.env`.
 
-## 3. Ingérer
+## 3. Ingest
 
 ```bash
 conda env create -f environment.yml

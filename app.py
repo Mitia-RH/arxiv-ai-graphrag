@@ -44,7 +44,7 @@ with st.sidebar:
     st.header("Ingestion")
     count_col, offset_col = st.columns(2)
     nb = count_col.number_input("Number of papers", 5, 500, 20, step=5)
-    offset = offset_col.number_input("Décalage (offset)", min_value=0, value=0, step=100)
+    offset = offset_col.number_input("Offset", min_value=0, value=0, step=100)
     if st.button("Ingest new papers"):
         with st.spinner("Fetching and enriching papers (this may take a few minutes)..."):
             pipeline.run(int(nb), offset=int(offset))
