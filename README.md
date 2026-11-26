@@ -68,6 +68,9 @@ python -m pytest
   (an intentional KISS tradeoff).
 - **Safety:** Generated Cypher is filtered to allow read-only queries and is also executed
   in a Neo4j read transaction.
+- **Indexes:** The full-text index on paper titles and abstracts supports text search.
+  The published-date index speeds up date filtering and ordering, while the citation-count
+  index supports efficient citation-based filtering and ranking.
 - `:Concept` nodes have a constraint but are not populated yet (phase 2).
 - Very recent papers may not yet be available in OpenAlex; they are ingested without citations.
 

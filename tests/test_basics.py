@@ -6,12 +6,28 @@ from typing import Any
 import pytest
 
 from src.database.neo4j_client import Neo4jClient
+from src.database.schema import CONSTRAINTS, INDEXES, create_schema
 from src.ingestion.arxiv_fetcher import clean_arxiv_id
 from src.ingestion.citation_enricher import arxiv_id_from_doi
 from src.ingestion import pipeline
 from src.database.repository import add_citations, upsert_paper
 from src.llm.graph_rag import CYPHER_SYSTEM_PROMPT, clean_cypher, is_read_only
 from src.llm import llm_client
+
+
+def test_create_schema_runs_constraints_and_indexes():
+    calls = []
+
+    class FakeClient:
+        def run_write(self, query: str, **params: Any) -> list[dict]:
+            calls.append(query)
+            return []
+
+    create_schema(FakeClient())
+
+    expected_statements = CONSTRAINTS + INDEXES
+    assert calls == expected_statements
+    assert all("IF NOT EXISTS" in statement for statement in calls)
 
 
 def test_clean_arxiv_id():

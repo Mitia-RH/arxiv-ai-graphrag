@@ -12,8 +12,17 @@ CONSTRAINTS = [
     "CREATE CONSTRAINT concept_name IF NOT EXISTS FOR (k:Concept) REQUIRE k.name IS UNIQUE",
 ]
 
+INDEXES = [
+    "CREATE FULLTEXT INDEX paper_text IF NOT EXISTS FOR (p:Paper) ON EACH [p.title, p.abstract]",
+    "CREATE INDEX paper_date IF NOT EXISTS FOR (p:Paper) ON (p.published_date)",
+    "CREATE INDEX paper_citations IF NOT EXISTS FOR (p:Paper) ON (p.citation_count)",
+]
+
 
 def create_schema(client: Neo4jClient) -> None:
     for statement in CONSTRAINTS:
         client.run_write(statement)
     logger.info("Verified %d Neo4j constraints.", len(CONSTRAINTS))
+    for statement in INDEXES:
+        client.run_write(statement)
+    logger.info("Verified %d Neo4j indexes.", len(INDEXES))
