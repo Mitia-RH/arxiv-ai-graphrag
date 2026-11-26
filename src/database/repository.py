@@ -32,43 +32,47 @@ def upsert_paper(client: Neo4jClient, paper: dict) -> None:
         SET p.title = $title, p.abstract = $abstract,
             p.published_date = $published_date, p.url = $url,
             p.citation_count = $citation_count, p.stub = false
+        WITH p
+        CALL {
+            WITH p
+            UNWIND $authors AS author_name
+            MERGE (a:Author {name: author_name})
+            MERGE (a)-[:WROTE]->(p)
+            RETURN count(*) AS authors_processed
+        }
+        WITH p
+        CALL {
+            WITH p
+            UNWIND $categories AS code
+            MERGE (c:Category {code: code})
+            MERGE (p)-[:BELONGS_TO]->(c)
+            RETURN count(*) AS categories_processed
+        }
+        RETURN p
         """,
         arxiv_id=paper["arxiv_id"], title=paper["title"], abstract=paper["abstract"],
         published_date=paper["published_date"], url=paper["url"],
-        citation_count=paper.get("citation_count"),
-    )
-    client.run_write(
-        """
-        MATCH (p:Paper {arxiv_id: $arxiv_id})
-        UNWIND $authors AS author_name
-        MERGE (a:Author {name: author_name})
-        MERGE (a)-[:WROTE]->(p)
-        """,
-        arxiv_id=paper["arxiv_id"], authors=paper["authors"],
-    )
-    client.run_write(
-        """
-        MATCH (p:Paper {arxiv_id: $arxiv_id})
-        UNWIND $categories AS code
-        MERGE (c:Category {code: code})
-        MERGE (p)-[:BELONGS_TO]->(c)
-        """,
-        arxiv_id=paper["arxiv_id"], categories=paper["categories"],
+        citation_count=paper.get("citation_count"), authors=paper["authors"],
+        categories=paper["categories"],
     )
 
 
-def add_citation(client: Neo4jClient, source_arxiv_id: str, target: dict) -> None:
-    """Add (source)-[:CITES]->(target). Create the target as a stub if it is unknown."""
+def add_citations(
+    client: Neo4jClient, source_arxiv_id: str, targets: list[dict]
+) -> None:
+    """Add citation edges, creating unknown targets as stubs."""
+    if not targets:
+        return
     client.run_write(
         """
-        MATCH (s:Paper {arxiv_id: $source_id})
-        MERGE (t:Paper {arxiv_id: $target_id})
-          ON CREATE SET t.stub = true, t.title = $target_title,
-                        t.url = 'https://arxiv.org/abs/' + $target_id
-        MERGE (s)-[:CITES]->(t)
+        UNWIND $targets AS t
+        MATCH (s:Paper {arxiv_id: $source_arxiv_id})
+        MERGE (c:Paper {arxiv_id: t.arxiv_id})
+          ON CREATE SET c.stub = true, c.title = t.title,
+                        c.url = 'https://arxiv.org/abs/' + t.arxiv_id
+        MERGE (s)-[:CITES]->(c)
         """,
-        source_id=source_arxiv_id, target_id=target["arxiv_id"],
-        target_title=target.get("title"),
+        source_arxiv_id=source_arxiv_id, targets=targets,
     )
 
 

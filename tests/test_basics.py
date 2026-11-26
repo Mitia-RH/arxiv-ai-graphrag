@@ -1,11 +1,15 @@
 """Basic tests for ID cleanup, Cypher cleanup, and read-only query safety.
 Run with: python -m pytest
 """
+from typing import Any
+
 import pytest
 
+from src.database.neo4j_client import Neo4jClient
 from src.ingestion.arxiv_fetcher import clean_arxiv_id
 from src.ingestion.citation_enricher import arxiv_id_from_doi
 from src.ingestion import pipeline
+from src.database.repository import add_citations, upsert_paper
 from src.llm.graph_rag import CYPHER_SYSTEM_PROMPT, clean_cypher, is_read_only
 from src.llm import llm_client
 
@@ -121,7 +125,70 @@ def test_pipeline_skips_existing_papers_but_not_stubs_unless_forced(
         lambda paper: enriched_ids.append(paper["arxiv_id"]) or paper,
     )
     monkeypatch.setattr(pipeline, "upsert_paper", lambda client, paper: None)
+    monkeypatch.setattr(pipeline, "add_citations", lambda client, source, targets: None)
 
     assert pipeline.run(limit=2, force=force) == len(expected_enriched)
     assert enriched_ids == expected_enriched
     assert len(read_calls) == (0 if force else 1)
+
+
+def test_add_citations_batches_targets_and_skips_empty_list():
+    calls = []
+
+    class FakeClient(Neo4jClient):
+        def __init__(self) -> None:
+            pass
+
+        def run_write(self, query: str, **params: Any) -> list[dict]:
+            calls.append((query, params))
+            return []
+
+    client = FakeClient()
+    targets: list[dict] = [
+        {"arxiv_id": "target-1", "title": "First"},
+        {"arxiv_id": "target-2", "title": "Second"},
+    ]
+
+    add_citations(client, "source", targets)
+
+    assert len(calls) == 1
+    query, params = calls[0]
+    assert "UNWIND $targets AS t" in query
+    assert params == {"source_arxiv_id": "source", "targets": targets}
+
+    empty_targets: list[dict] = []
+    add_citations(client, "source", empty_targets)
+    assert len(calls) == 1
+
+
+def test_upsert_paper_uses_one_write_query():
+    calls = []
+
+    class FakeClient(Neo4jClient):
+        def __init__(self) -> None:
+            pass
+
+        def run_write(self, query: str, **params: Any) -> list[dict]:
+            calls.append((query, params))
+            return []
+
+    paper = {
+        "arxiv_id": "paper",
+        "title": "Title",
+        "abstract": "Abstract",
+        "published_date": "2024-01-01",
+        "url": "https://arxiv.org/abs/paper",
+        "authors": ["Author"],
+        "categories": ["cs.AI"],
+        "citation_count": 3,
+    }
+
+    upsert_paper(FakeClient(), paper)
+
+    assert len(calls) == 1
+    query, params = calls[0]
+    assert query.count("CALL {") == 2
+    assert "p.stub = false" in query
+    assert params["authors"] == paper["authors"]
+    assert params["categories"] == paper["categories"]
+    assert params["citation_count"] == 3

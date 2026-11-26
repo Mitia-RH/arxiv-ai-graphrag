@@ -8,7 +8,7 @@ import logging
 
 import config
 from src.database.neo4j_client import Neo4jClient
-from src.database.repository import add_citation, get_existing_ids, upsert_paper
+from src.database.repository import add_citations, get_existing_ids, upsert_paper
 from src.database.schema import create_schema
 from src.ingestion.arxiv_fetcher import fetch_papers
 from src.ingestion.citation_enricher import enrich_paper
@@ -34,8 +34,8 @@ def run(limit: int = config.MAX_PAPERS, offset: int = 0, force: bool = False) ->
         for i, paper in enumerate(papers_to_process, start=1):
             paper = enrich_paper(paper)
             upsert_paper(client, paper)
-            for ref in paper["references"]:
-                add_citation(client, paper["arxiv_id"], ref)
+            if paper["references"]:
+                add_citations(client, paper["arxiv_id"], paper["references"])
             logger.info("[%d/%d] %s | added %d citations | %s",
                         i, len(papers_to_process), paper["arxiv_id"], len(paper["references"]),
                         paper["title"][:60])
