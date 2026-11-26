@@ -21,6 +21,8 @@ Schema:
 
 Rules:
 - Titles and abstracts are in ENGLISH: search with toLower(...) CONTAINS 'lowercase english term'.
+- Use the singular form and the shortest useful term (for example, 'llm', not 'llms').
+- When a concept has common synonyms or abbreviations, search each term in both the title and abstract and combine all matches with OR (for example, 'large language model' OR 'llm').
 - stub=true means the paper is a cited reference only (no abstract). For full papers, use WHERE p.stub = false.
 - Always end with LIMIT 10 (or fewer).
 - Always return p.title and p.url when returning papers.
@@ -34,6 +36,15 @@ MATCH (p:Paper) WHERE p.stub = false AND (toLower(p.title) CONTAINS 'reinforceme
 
 Question: Which authors have written the most papers?
 MATCH (a:Author)-[:WROTE]->(p:Paper) RETURN a.name AS author, count(p) AS paper_count ORDER BY paper_count DESC LIMIT 10
+
+Question: Who are the co-authors of an author?
+MATCH (a:Author)-[:WROTE]->(p:Paper)<-[:WROTE]-(coauthor:Author) WHERE toLower(a.name) CONTAINS 'author name' AND coauthor <> a RETURN DISTINCT coauthor.name AS coauthor ORDER BY coauthor LIMIT 10
+
+Question: Which papers were written by an author?
+MATCH (a:Author)-[:WROTE]->(p:Paper) WHERE toLower(a.name) CONTAINS 'author name' AND p.stub = false RETURN p.title AS title, p.url AS url, p.published_date AS date ORDER BY date DESC LIMIT 10
+
+Question: How many papers were published each year?
+MATCH (p:Paper) WHERE p.stub = false AND p.published_date IS NOT NULL RETURN substring(p.published_date, 0, 4) AS year, count(p) AS paper_count ORDER BY year DESC LIMIT 10
 """
 
 ANSWER_SYSTEM_PROMPT = """You are a scientific research assistant. Respond in English, in a few sentences,

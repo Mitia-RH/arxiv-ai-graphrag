@@ -6,7 +6,7 @@ import pytest
 from src.ingestion.arxiv_fetcher import clean_arxiv_id
 from src.ingestion.citation_enricher import arxiv_id_from_doi
 from src.ingestion import pipeline
-from src.llm.graph_rag import clean_cypher, is_read_only
+from src.llm.graph_rag import CYPHER_SYSTEM_PROMPT, clean_cypher, is_read_only
 from src.llm import llm_client
 
 
@@ -75,6 +75,15 @@ def test_read_only_rejects_writes():
     assert not is_read_only("CREATE (p:Paper {arxiv_id: '1'})")
     assert not is_read_only("MATCH (p:Paper) RETURN p; MATCH (a) DELETE a")
     assert not is_read_only("Here is the query: MATCH (p) RETURN p")
+
+
+def test_cypher_prompt_examples_are_read_only():
+    queries = [
+        line for line in CYPHER_SYSTEM_PROMPT.splitlines() if line.startswith("MATCH")
+    ]
+
+    assert queries
+    assert all(is_read_only(query) for query in queries)
 
 
 @pytest.mark.parametrize(
