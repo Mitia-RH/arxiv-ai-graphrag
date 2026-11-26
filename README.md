@@ -58,11 +58,15 @@ streamlit run app.py
 
 Try asking: *"Which papers are cited the most?"* The **View the Cypher query and raw data**
 section below each answer lets you inspect the results and verify the response.
+Use **Insights** for PageRank rankings, community summaries, and monthly publication counts;
+the tab can compute analytics when they are missing. **Graph** renders the selected paper's
+one-hop author and citation neighbourhood.
 
 ## Graph analytics
 
 Neo4j starts with the Graph Data Science (GDS) plugin configured; the first container
-start downloads it. After ingestion, compute PageRank scores and Leiden communities with:
+start downloads it. After ingestion, compute PageRank scores and Leiden communities from
+the **Insights** tab or with:
 
 ```bash
 python -m src.database.analytics

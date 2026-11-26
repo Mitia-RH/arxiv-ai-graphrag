@@ -12,6 +12,8 @@ from src.database.repository import (
     add_citations,
     get_community_summary,
     get_top_pagerank,
+    get_paper_neighborhood,
+    get_papers_per_month,
     upsert_paper,
 )
 from src.database.schema import CONSTRAINTS, INDEXES, create_schema
@@ -381,3 +383,36 @@ def test_repository_analytics_queries_are_database_free():
     with pytest.raises(ValueError, match="non-negative"):
         get_top_pagerank(client, -1)
     assert len(calls) == 2
+
+
+def test_repository_insight_and_neighborhood_queries_are_database_free():
+    calls = []
+    neighborhood = {
+        "paper": {"arxiv_id": "paper", "title": "Paper"},
+        "authors": [{"name": "Author"}],
+        "cited": [],
+        "citing": [],
+    }
+
+    class FakeClient:
+        def run_read(self, query: str, **params: Any) -> list[dict]:
+            calls.append((query, params))
+            if "MATCH (p:Paper {arxiv_id: $arxiv_id})" in query:
+                return [neighborhood]
+            return [{"month": "2025-01", "paper_count": 2}]
+
+    client = FakeClient()
+
+    assert get_papers_per_month(client) == [
+        {"month": "2025-01", "paper_count": 2}
+    ]
+    assert "substring(p.published_date, 0, 7) AS month" in calls[0][0]
+    assert "p.stub = false" in calls[0][0]
+
+    assert get_paper_neighborhood(client, "paper") == neighborhood
+    query, params = calls[1]
+    assert params == {"arxiv_id": "paper", "max_neighbors": 49}
+    assert "MATCH (a:Author)-[:WROTE]->(p)" in query
+    assert "MATCH (p)-[:CITES]->(c:Paper)" in query
+    assert "MATCH (c:Paper)-[:CITES]->(p)" in query
+    assert query.count("LIMIT $max_neighbors") == 3

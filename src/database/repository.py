@@ -1,4 +1,6 @@
 """Write operations (always using MERGE for idempotency) and statistics."""
+from typing import Any
+
 from src.database.neo4j_client import Neo4jClient
 
 
@@ -127,3 +129,52 @@ def get_community_summary(client: Neo4jClient) -> list[dict]:
         ORDER BY size DESC, community_id
         """
     )
+
+
+def get_papers_per_month(client: Neo4jClient) -> list[dict]:
+    """Return counts of complete papers grouped by their publication month."""
+    return client.run_read(
+        """
+        MATCH (p:Paper)
+        WHERE p.stub = false AND p.published_date IS NOT NULL
+        WITH substring(p.published_date, 0, 7) AS month
+        RETURN month, count(*) AS paper_count
+        ORDER BY month
+        """
+    )
+
+
+def get_paper_neighborhood(
+    client: Neo4jClient, arxiv_id: str, max_neighbors: int = 49
+) -> dict[str, Any] | None:
+    """Return a paper and up to `max_neighbors` adjacent nodes per relation type."""
+    if max_neighbors < 0:
+        raise ValueError("max_neighbors must be non-negative")
+    rows = client.run_read(
+        """
+        MATCH (p:Paper {arxiv_id: $arxiv_id})
+        CALL {
+            WITH p
+            MATCH (a:Author)-[:WROTE]->(p)
+            WITH DISTINCT a ORDER BY a.name LIMIT $max_neighbors
+            RETURN collect({name: a.name}) AS authors
+        }
+        CALL {
+            WITH p
+            MATCH (p)-[:CITES]->(c:Paper)
+            WITH DISTINCT c ORDER BY c.arxiv_id LIMIT $max_neighbors
+            RETURN collect({arxiv_id: c.arxiv_id, title: c.title}) AS cited
+        }
+        CALL {
+            WITH p
+            MATCH (c:Paper)-[:CITES]->(p)
+            WITH DISTINCT c ORDER BY c.arxiv_id LIMIT $max_neighbors
+            RETURN collect({arxiv_id: c.arxiv_id, title: c.title}) AS citing
+        }
+        RETURN {arxiv_id: p.arxiv_id, title: p.title} AS paper,
+               authors, cited, citing
+        """,
+        arxiv_id=arxiv_id,
+        max_neighbors=max_neighbors,
+    )
+    return rows[0] if rows else None
