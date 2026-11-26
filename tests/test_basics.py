@@ -1,5 +1,5 @@
-"""Tests simples : nettoyage des IDs, nettoyage du Cypher, sécurité lecture seule.
-Lancer : python -m pytest
+"""Basic tests for ID cleanup, Cypher cleanup, and read-only query safety.
+Run with: python -m pytest
 """
 from src.ingestion.arxiv_fetcher import clean_arxiv_id
 from src.ingestion.citation_enricher import arxiv_id_from_doi
@@ -25,7 +25,7 @@ def test_clean_cypher_removes_markdown():
 
 def test_read_only_accepts_reads():
     assert is_read_only("MATCH (p:Paper) RETURN p.title LIMIT 5")
-    # 'set' dans une chaîne de caractères ne doit pas déclencher de faux positif
+    # 'set' in a string literal must not trigger a false positive.
     assert is_read_only("MATCH (p:Paper) WHERE p.title CONTAINS 'data set' RETURN p.title")
 
 
@@ -34,4 +34,4 @@ def test_read_only_rejects_writes():
     assert not is_read_only("MATCH (p:Paper) SET p.title = 'x' RETURN p")
     assert not is_read_only("CREATE (p:Paper {arxiv_id: '1'})")
     assert not is_read_only("MATCH (p:Paper) RETURN p; MATCH (a) DELETE a")
-    assert not is_read_only("Voici la requête : MATCH (p) RETURN p")
+    assert not is_read_only("Here is the query: MATCH (p) RETURN p")

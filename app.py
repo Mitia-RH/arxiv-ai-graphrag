@@ -1,4 +1,4 @@
-"""Interface Streamlit : chat GraphRAG + statistiques. Lancer : streamlit run app.py"""
+"""Streamlit interface: GraphRAG chat and statistics. Run with: streamlit run app.py"""
 import logging
 
 import streamlit as st
@@ -25,39 +25,39 @@ def get_client() -> Neo4jClient:
 try:
     client = get_client()
 except Exception as error:
-    st.error(f"Neo4j inaccessible : {error}\n\nAs-tu lancé `docker compose up -d` ?")
+    st.error(f"Neo4j is unavailable: {error}\n\nHave you run `docker compose up -d`?")
     st.stop()
 
-# ---------- Barre latérale ----------
+# ---------- Sidebar ----------
 with st.sidebar:
-    st.header("Base Neo4j")
+    st.header("Neo4j database")
     stats = get_graph_stats(client)
-    st.metric("Papiers (cs.AI)", stats["papers"])
-    st.metric("Papiers cités (références)", stats["stubs"])
-    st.metric("Auteurs", stats["authors"])
+    st.metric("Papers (cs.AI)", stats["papers"])
+    st.metric("Cited papers (references)", stats["stubs"])
+    st.metric("Authors", stats["authors"])
     st.metric("Citations", stats["citations"])
 
-    st.header("LLM local")
-    st.write(f"Modèle : `{config.OLLAMA_MODEL}`")
-    st.write("✅ Ollama actif" if is_available() else "❌ Ollama injoignable")
+    st.header("Local LLM")
+    st.write(f"Model: `{config.OLLAMA_MODEL}`")
+    st.write("✅ Ollama is running" if is_available() else "❌ Ollama is unreachable")
 
     st.header("Ingestion")
-    nb = st.number_input("Nombre de papiers", 5, 500, 20, step=5)
-    if st.button("Ingérer de nouveaux papiers"):
-        with st.spinner("Collecte et enrichissement en cours (quelques minutes)..."):
+    nb = st.number_input("Number of papers", 5, 500, 20, step=5)
+    if st.button("Ingest new papers"):
+        with st.spinner("Fetching and enriching papers (this may take a few minutes)..."):
             pipeline.run(int(nb))
         st.rerun()
 
 # ---------- Chat ----------
 st.title("🕸️ ArXiv AI — GraphRAG")
-st.caption("Pose une question sur l'état de l'art en IA (réponses issues du graphe Neo4j).")
+st.caption("Ask a question about AI research (answers are based on the Neo4j graph).")
 
 if "history" not in st.session_state:
     st.session_state.history = []
 
 
 def show_details(msg: dict) -> None:
-    with st.expander("Voir la requête Cypher et les données brutes"):
+    with st.expander("View the Cypher query and raw data"):
         st.code(msg["cypher"], language="cypher")
         st.json(msg["rows"])
 
@@ -68,15 +68,15 @@ for msg in st.session_state.history:
         if msg["role"] == "assistant":
             show_details(msg)
 
-if question := st.chat_input("Ex : Quels papiers parlent d'agents LLM ?"):
+if question := st.chat_input("e.g. Which papers discuss LLM agents?"):
     st.session_state.history.append({"role": "user", "content": question})
     with st.chat_message("user"):
         st.write(question)
     with st.chat_message("assistant"):
-        with st.spinner("Je réfléchis..."):
+        with st.spinner("Thinking..."):
             try:
                 res = graph_rag.ask(client, question)
-            except Exception as error:  # ex. Ollama éteint
+            except Exception as error:  # For example, Ollama is unavailable.
                 res = {"answer": "", "cypher": "", "rows": [], "error": str(error)}
         text = res["answer"] or f"⚠️ {res['error']}"
         st.write(text)

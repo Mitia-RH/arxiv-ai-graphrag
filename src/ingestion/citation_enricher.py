@@ -1,7 +1,7 @@
-"""Enrichissement via OpenAlex : nombre de citations + références vers d'autres papiers arXiv.
+"""Enrich papers via OpenAlex with citation counts and references to other arXiv papers.
 
-Choix de simplicité : on ne garde que les références qui ont elles-mêmes un identifiant
-arXiv. Ainsi tous les nœuds :Paper ont un `arxiv_id` unique, comme le veut le schéma.
+For simplicity, only keep references that have an arXiv ID. This ensures every
+:Paper node has a unique `arxiv_id`, as required by the schema.
 """
 import logging
 import re
@@ -18,7 +18,7 @@ BASE_URL = "https://api.openalex.org"
 
 
 def arxiv_id_from_doi(doi: str | None) -> str | None:
-    """'https://doi.org/10.48550/arXiv.1706.03762' -> '1706.03762' (None si pas arXiv)."""
+    """Convert 'https://doi.org/10.48550/arXiv.1706.03762' to '1706.03762' (None if not arXiv)."""
     if not doi:
         return None
     match = re.search(r"10\.48550/arxiv\.(.+)$", doi, flags=re.IGNORECASE)
@@ -26,7 +26,7 @@ def arxiv_id_from_doi(doi: str | None) -> str | None:
 
 
 def _get(path: str, params: dict | None = None) -> dict | None:
-    """GET avec pause polie. Retourne None si 404, lève une exception sinon."""
+    """Send a GET request with a polite delay. Return None on 404; raise otherwise."""
     params = dict(params or {})
     if config.OPENALEX_EMAIL:
         params["mailto"] = config.OPENALEX_EMAIL
@@ -39,9 +39,9 @@ def _get(path: str, params: dict | None = None) -> dict | None:
 
 
 def _resolve_arxiv_references(openalex_ids: list[str]) -> list[dict]:
-    """Parmi des IDs OpenAlex ('W123'), garde ceux qui sont des papiers arXiv."""
+    """Keep only arXiv papers from a list of OpenAlex IDs ('W123')."""
     refs = []
-    for i in range(0, len(openalex_ids), 50):          # OpenAlex limite à 50 valeurs par filtre
+    for i in range(0, len(openalex_ids), 50):          # OpenAlex limits each filter to 50 values.
         chunk = openalex_ids[i:i + 50]
         data = _get("/works", {
             "filter": "openalex:" + "|".join(chunk),
@@ -56,17 +56,17 @@ def _resolve_arxiv_references(openalex_ids: list[str]) -> list[dict]:
 
 
 def enrich_paper(paper: dict) -> dict:
-    """Ajoute `citation_count` et `references` au papier. Ne plante jamais."""
+    """Add `citation_count` and `references` to a paper. Never fail."""
     paper["citation_count"] = None
     paper["references"] = []
     try:
         work = _get(f"/works/doi:10.48550/arXiv.{paper['arxiv_id']}")
         if work is None:
-            logger.info("%s : inconnu d'OpenAlex (trop récent ?).", paper["arxiv_id"])
+            logger.info("%s: not found in OpenAlex (perhaps too recent).", paper["arxiv_id"])
             return paper
         paper["citation_count"] = work.get("cited_by_count")
         ids = [url.rsplit("/", 1)[-1] for url in work.get("referenced_works", [])]
         paper["references"] = _resolve_arxiv_references(ids)
     except requests.RequestException as error:
-        logger.warning("%s : OpenAlex a échoué (%s), on continue.", paper["arxiv_id"], error)
+        logger.warning("%s: OpenAlex request failed (%s); continuing.", paper["arxiv_id"], error)
     return paper

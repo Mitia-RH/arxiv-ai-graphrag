@@ -1,17 +1,17 @@
-"""Appel minimal à Ollama (API HTTP locale). Pas de framework, juste `requests`."""
+"""Minimal Ollama client using its local HTTP API and `requests`."""
 import requests
 
 import config
 
 
 def chat(system: str, user: str, temperature: float = 0.0) -> str:
-    """Envoie un message à Ollama et retourne la réponse texte."""
+    """Send a message to Ollama and return the response text."""
     response = requests.post(
         f"{config.OLLAMA_BASE_URL}/api/chat",
         json={
             "model": config.OLLAMA_MODEL,
             "stream": False,
-            "options": {"temperature": temperature},  # 0.0 = déterministe, idéal pour du code
+            "options": {"temperature": temperature},  # 0.0 is deterministic, ideal for code.
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
@@ -24,7 +24,7 @@ def chat(system: str, user: str, temperature: float = 0.0) -> str:
 
 
 def is_available() -> bool:
-    """True si le serveur Ollama répond."""
+    """Return whether the Ollama server is responding."""
     try:
         return requests.get(f"{config.OLLAMA_BASE_URL}/api/tags", timeout=3).ok
     except requests.RequestException:

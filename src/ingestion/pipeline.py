@@ -1,4 +1,4 @@
-"""Orchestrateur : Fetch -> Enrich -> Load.
+"""Orchestrator: fetch -> enrich -> load.
 
 Usage : python -m src.ingestion.pipeline --limit 50
 """
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def run(limit: int = config.MAX_PAPERS) -> int:
-    """Ingère `limit` papiers. Relançable sans doublons (MERGE). Retourne le nombre traité."""
+    """Ingest `limit` papers. Safe to rerun without duplicates (MERGE); return the number processed."""
     papers = fetch_papers(limit)
     with Neo4jClient() as client:
         create_schema(client)
@@ -25,7 +25,7 @@ def run(limit: int = config.MAX_PAPERS) -> int:
             upsert_paper(client, paper)
             for ref in paper["references"]:
                 add_citation(client, paper["arxiv_id"], ref)
-            logger.info("[%d/%d] %s | %d citations ajoutées | %s",
+            logger.info("[%d/%d] %s | added %d citations | %s",
                         i, len(papers), paper["arxiv_id"], len(paper["references"]),
                         paper["title"][:60])
     return len(papers)
@@ -37,4 +37,4 @@ if __name__ == "__main__":
     parser.add_argument("--limit", type=int, default=config.MAX_PAPERS)
     args = parser.parse_args()
     total = run(args.limit)
-    logger.info("Terminé : %d papiers traités.", total)
+    logger.info("Done: processed %d papers.", total)

@@ -1,4 +1,4 @@
-"""Configuration centralisée : tout vient du fichier .env (jamais de mot de passe en dur)."""
+"""Centralized configuration loaded from .env (never hardcode passwords)."""
 import os
 
 from dotenv import load_dotenv
@@ -15,11 +15,11 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:4b")
 
 # --- Ingestion ---
-ARXIV_CATEGORY = "cs.AI"                         # périmètre fixe du projet
+ARXIV_CATEGORY = "cs.AI"                         # Fixed project scope.
 MAX_PAPERS = int(os.getenv("MAX_PAPERS", "100"))
 OPENALEX_EMAIL = os.getenv("OPENALEX_EMAIL", "")
 OPENALEX_DELAY_S = 0.2                           # pause polie entre deux appels OpenAlex
 
 # --- GraphRAG ---
-MAX_ROWS_FOR_LLM = 15      # lignes de résultat transmises au LLM (petite fenêtre de contexte)
-MAX_CHARS_PER_VALUE = 300  # troncature des textes longs (ex. résumés)
+MAX_ROWS_FOR_LLM = 15      # Result rows passed to the LLM (small context window).
+MAX_CHARS_PER_VALUE = 300  # Truncate long text values (e.g. abstracts).

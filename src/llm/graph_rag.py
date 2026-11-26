@@ -1,6 +1,6 @@
-"""GraphRAG : Question -> Cypher -> Neo4j -> Réponse rédigée.
+"""GraphRAG: question -> Cypher -> Neo4j -> generated answer.
 
-Chaque étape est visible et le Cypher généré est toujours renvoyé (transparence).
+Each step is visible, and the generated Cypher is always returned for transparency.
 """
 import json
 import logging
@@ -11,34 +11,34 @@ from src.llm.llm_client import chat
 
 logger = logging.getLogger(__name__)
 
-CYPHER_SYSTEM_PROMPT = """Tu génères des requêtes Cypher (Neo4j) en LECTURE SEULE.
-Réponds UNIQUEMENT avec la requête, sans explication ni balises.
+CYPHER_SYSTEM_PROMPT = """Generate read-only Cypher queries for Neo4j.
+Respond ONLY with the query, without explanations or code fences.
 
-Schéma :
+Schema:
 (:Author {name})-[:WROTE]->(:Paper {arxiv_id, title, abstract, published_date, url, citation_count, stub})
 (:Paper)-[:BELONGS_TO]->(:Category {code})
 (:Paper)-[:CITES]->(:Paper)
 
-Règles :
-- Titres et résumés sont en ANGLAIS : cherche avec toLower(...) CONTAINS 'mot anglais minuscule'.
-- stub=true signifie papier seulement cité (pas de résumé). Pour les papiers complets : WHERE p.stub = false.
-- Toujours terminer par LIMIT 10 (ou moins).
-- Renvoie toujours p.title et p.url quand tu retournes des papiers.
+Rules:
+- Titles and abstracts are in ENGLISH: search with toLower(...) CONTAINS 'lowercase english term'.
+- stub=true means the paper is a cited reference only (no abstract). For full papers, use WHERE p.stub = false.
+- Always end with LIMIT 10 (or fewer).
+- Always return p.title and p.url when returning papers.
 
-Exemples :
-Question: Quels sont les papiers les plus cités ?
-MATCH (p:Paper)<-[:CITES]-(c:Paper) RETURN p.title AS title, p.url AS url, count(c) AS nb_citations ORDER BY nb_citations DESC LIMIT 10
+Examples:
+Question: Which papers are cited the most?
+MATCH (p:Paper)<-[:CITES]-(c:Paper) RETURN p.title AS title, p.url AS url, count(c) AS citation_count ORDER BY citation_count DESC LIMIT 10
 
-Question: Quels papiers parlent de reinforcement learning ?
+Question: Which papers discuss reinforcement learning?
 MATCH (p:Paper) WHERE p.stub = false AND (toLower(p.title) CONTAINS 'reinforcement learning' OR toLower(p.abstract) CONTAINS 'reinforcement learning') RETURN p.title AS title, p.url AS url, p.published_date AS date ORDER BY date DESC LIMIT 10
 
-Question: Quels auteurs ont écrit le plus de papiers ?
-MATCH (a:Author)-[:WROTE]->(p:Paper) RETURN a.name AS author, count(p) AS nb_papers ORDER BY nb_papers DESC LIMIT 10
+Question: Which authors have written the most papers?
+MATCH (a:Author)-[:WROTE]->(p:Paper) RETURN a.name AS author, count(p) AS paper_count ORDER BY paper_count DESC LIMIT 10
 """
 
-ANSWER_SYSTEM_PROMPT = """Tu es un assistant de veille scientifique. Réponds en français, en quelques phrases,
-UNIQUEMENT à partir des résultats fournis. Cite les titres et les liens arXiv.
-Si les résultats sont vides, dis simplement qu'aucun papier n'a été trouvé."""
+ANSWER_SYSTEM_PROMPT = """You are a scientific research assistant. Respond in English, in a few sentences,
+using ONLY the provided results. Cite paper titles and arXiv links.
+If there are no results, simply say that no papers were found."""
 
 FORBIDDEN = re.compile(
     r"\b(CREATE|DELETE|DETACH|SET|MERGE|REMOVE|DROP|LOAD|FOREACH|CALL)\b", re.IGNORECASE
@@ -46,21 +46,21 @@ FORBIDDEN = re.compile(
 
 
 def clean_cypher(raw: str) -> str:
-    """Retire les balises Markdown ```cypher ... ``` et le ';' final ajoutés par le modèle."""
+    """Remove Markdown ```cypher ... ``` fences and a trailing semicolon added by the model."""
     text = re.sub(r"```(?:cypher)?", "", raw, flags=re.IGNORECASE).strip()
     return text.split(";")[0].strip()
 
 
 def is_read_only(cypher: str) -> bool:
-    """Vrai si la requête est une lecture simple (MATCH ... RETURN) sans mot-clé d'écriture."""
-    # On vide les chaînes de caractères : un titre contenant 'set' ne doit pas être refusé.
+    """Return whether the query is a simple read (MATCH ... RETURN) with no write keywords."""
+    # Strip string literals so a title containing 'set' is not incorrectly rejected.
     without_strings = re.sub(r"'[^']*'|\"[^\"]*\"", "''", cypher)
     starts_ok = re.match(r"\s*(MATCH|OPTIONAL\s+MATCH|WITH)\b", without_strings, re.IGNORECASE)
     return bool(starts_ok) and not FORBIDDEN.search(without_strings) and ";" not in without_strings
 
 
 def _shrink(rows: list[dict]) -> str:
-    """Réduit les résultats pour tenir dans la petite fenêtre de contexte du modèle."""
+    """Shrink results to fit the model's small context window."""
     def cut(v):
         return v[:config.MAX_CHARS_PER_VALUE] if isinstance(v, str) else v
     small = [{k: cut(v) for k, v in row.items()} for row in rows[:config.MAX_ROWS_FOR_LLM]]
@@ -68,34 +68,34 @@ def _shrink(rows: list[dict]) -> str:
 
 
 def ask(client, question: str) -> dict:
-    """Pose une question au graphe. Retourne {answer, cypher, rows, error}."""
+    """Ask the graph a question. Return {answer, cypher, rows, error}."""
     result = {"answer": "", "cypher": "", "rows": [], "error": None}
 
     cypher = clean_cypher(chat(CYPHER_SYSTEM_PROMPT, f"Question: {question}"))
     result["cypher"] = cypher
     if not is_read_only(cypher):
-        result["error"] = "Requête refusée : elle n'est pas en lecture seule."
+        result["error"] = "Query rejected: it is not read-only."
         return result
 
     try:
         rows = client.run_read(cypher)
     except Exception as error:  # syntaxe Cypher invalide : 1 seule tentative d'auto-correction
         logger.warning("Cypher invalide (%s), nouvelle tentative.", error)
-        fix_prompt = (f"Question: {question}\nRequête précédente: {cypher}\n"
-                      f"Erreur Neo4j: {error}\nCorrige la requête.")
+        fix_prompt = (f"Question: {question}\nPrevious query: {cypher}\n"
+                      f"Neo4j error: {error}\nFix the query.")
         cypher = clean_cypher(chat(CYPHER_SYSTEM_PROMPT, fix_prompt))
         result["cypher"] = cypher
         if not is_read_only(cypher):
-            result["error"] = "Requête corrigée refusée : elle n'est pas en lecture seule."
+            result["error"] = "Corrected query rejected: it is not read-only."
             return result
         try:
             rows = client.run_read(cypher)
         except Exception as error2:
-            result["error"] = f"Cypher invalide après correction : {error2}"
+            result["error"] = f"Invalid Cypher after correction: {error2}"
             return result
 
     result["rows"] = rows
     result["answer"] = chat(
-        ANSWER_SYSTEM_PROMPT, f"Question: {question}\nRésultats: {_shrink(rows)}"
+        ANSWER_SYSTEM_PROMPT, f"Question: {question}\nResults: {_shrink(rows)}"
     )
     return result

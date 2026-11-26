@@ -1,11 +1,11 @@
-# Neo4j local. Les identifiants viennent du fichier .env (voir .env.example).
+# Local Neo4j. Credentials are read from .env (see .env.example).
 services:
   neo4j:
     image: neo4j:5-community
     container_name: arxiv-neo4j
     ports:
       - "7474:7474"   # Neo4j Browser (http)
-      - "7687:7687"   # Bolt (utilisé par Python)
+      - "7687:7687"   # Bolt (used by Python).
     environment:
       NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-changeme123}
     volumes:

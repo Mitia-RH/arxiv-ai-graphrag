@@ -1,4 +1,4 @@
-"""Contraintes d'unicité. `IF NOT EXISTS` rend l'appel répétable sans risque."""
+"""Uniqueness constraints. `IF NOT EXISTS` makes this safe to run repeatedly."""
 import logging
 
 from src.database.neo4j_client import Neo4jClient
@@ -16,4 +16,4 @@ CONSTRAINTS = [
 def create_schema(client: Neo4jClient) -> None:
     for statement in CONSTRAINTS:
         client.run_write(statement)
-    logger.info("Contraintes Neo4j vérifiées (%d).", len(CONSTRAINTS))
+    logger.info("Verified %d Neo4j constraints.", len(CONSTRAINTS))

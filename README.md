@@ -1,61 +1,74 @@
 # ArXiv AI — Knowledge Graph & GraphRAG
 
-Explore les articles **arXiv cs.AI** sous forme de graphe (**Neo4j**) et interroge-les en
-français grâce à un **LLM local** (**Ollama + Qwen3:4b**). 100 % local, aucune API payante.
+Explore **arXiv cs.AI** papers as a **Neo4j** graph and query them in English using a
+**local LLM** (**Ollama + Qwen3:4b**). 100% local, with no paid APIs.
 
 ```
-arXiv ──► OpenAlex (citations) ──► Neo4j ◄── Question ► LLM ► Cypher ► Réponse
-         (ingestion)                          (GraphRAG, interface Streamlit)
+arXiv ──► OpenAlex (citations) ──► Neo4j ◄── Question ► LLM ► Cypher ► Answer
+         (ingestion)                          (GraphRAG, Streamlit interface)
 ```
 
-## Prérequis
+## Requirements
+
 [Conda](https://conda.io/projects/conda/en/latest/user-guide/install/index.html), Docker,
-et [Ollama](https://ollama.com/download). L'environnement Conda installe Python 3.11.
+and [Ollama](https://ollama.com/download). The Conda environment installs Python 3.11.
 
-## 1. Lancer Neo4j
+## 1. Start Neo4j
+
 ```bash
-cp .env.example .env        # puis modifie NEO4J_PASSWORD (8 caractères min.)
+cp .env.example .env        # Then update NEO4J_PASSWORD (at least 8 characters).
 docker compose up -d
 ```
-Neo4j Browser : <http://localhost:7474> (identifiants du `.env`).
 
-## 2. Installer Ollama et un modèle léger
+Neo4j Browser: <http://localhost:7474> (credentials are in `.env`).
+
+## 2. Install Ollama and a lightweight model
+
 ```bash
 ollama pull qwen3:4b
 ```
-Pour utiliser un autre modèle Ollama, télécharge-le puis change `OLLAMA_MODEL` dans `.env`.
 
-## 3. Installer et ingérer
+To use a different Ollama model, download it and update `OLLAMA_MODEL` in `.env`.
+
+## 3. Install dependencies and ingest papers
+
 ```bash
 conda env create -f environment.yml
 conda activate arxiv-ai-graphrag
 python -m src.ingestion.pipeline --limit 50
 ```
-L'environnement doit être activé dans chaque nouveau terminal. Relançable à volonté :
-`MERGE` évite tout doublon.
 
-## 4. Lancer l'interface
+Activate the environment in each new terminal. Ingestion can be rerun at any time:
+`MERGE` prevents duplicates.
+
+## 4. Launch the app
+
 ```bash
 streamlit run app.py
 ```
-Pose par exemple : *« Quels sont les papiers les plus cités ? »*. Sous chaque réponse,
-le bloc « Voir la requête Cypher et les données brutes » permet de vérifier l'absence d'hallucination.
+
+Try asking: *"Which papers are cited the most?"* The **View the Cypher query and raw data**
+section below each answer lets you inspect the results and verify the response.
 
 ## Tests
+
 ```bash
 python -m pytest
 ```
 
-## Choix de conception (à connaître)
-- **Citations** : on ne garde que les références qui ont elles-mêmes un ID arXiv. Celles qui ne
-  sont pas dans le corpus deviennent des nœuds `:Paper {stub: true}` (titre + lien, sans résumé).
-  C'est ce qui fait apparaître les papiers « fondateurs » très cités.
-- **Auteurs** identifiés par leur nom : deux homonymes seront fusionnés (limite assumée, KISS).
-- **Sécurité** : le Cypher généré est filtré (lecture seule) *et* exécuté dans une transaction
-  de lecture Neo4j.
-- Les `:Concept` (phase 2) ont leur contrainte mais ne sont pas encore alimentés.
-- Les papiers très récents sont parfois absents d'OpenAlex : ils sont chargés sans citations.
+## Design notes
 
-## Structure
-`config.py` · `src/ingestion/` (arXiv, OpenAlex, pipeline) · `src/database/` (client, schéma, repository)
-· `src/llm/` (Ollama, GraphRAG) · `app.py` (Streamlit) · `tests/`
+- **Citations:** Only references with an arXiv ID are kept. References not in the corpus
+  become `:Paper {stub: true}` nodes (title and URL, no abstract). This surfaces highly
+  cited foundational papers.
+- **Authors** are identified by name, so two authors with the same name are merged
+  (an intentional KISS tradeoff).
+- **Safety:** Generated Cypher is filtered to allow read-only queries and is also executed
+  in a Neo4j read transaction.
+- `:Concept` nodes have a constraint but are not populated yet (phase 2).
+- Very recent papers may not yet be available in OpenAlex; they are ingested without citations.
+
+## Project structure
+
+`config.py` · `src/ingestion/` (arXiv, OpenAlex, pipeline) · `src/database/` (client, schema,
+repository) · `src/llm/` (Ollama, GraphRAG) · `app.py` (Streamlit) · `tests/`

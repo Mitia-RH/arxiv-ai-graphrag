@@ -1,15 +1,15 @@
-"""Fonctions d'écriture (toujours avec MERGE => idempotent) et statistiques."""
+"""Write operations (always using MERGE for idempotency) and statistics."""
 from src.database.neo4j_client import Neo4jClient
 
 
 def upsert_paper(client: Neo4jClient, paper: dict) -> None:
-    """Crée ou met à jour un papier, ses auteurs et ses catégories.
+    """Create or update a paper, its authors, and its categories.
 
-    `paper` : arxiv_id, title, abstract, published_date, url,
-              authors (list[str]), categories (list[str]), citation_count (optionnel).
+    `paper`: arxiv_id, title, abstract, published_date, url,
+             authors (list[str]), categories (list[str]), citation_count (optional).
     """
-    # stub=false : ce papier est "complet" (il a pu être créé auparavant
-    # comme simple référence citée par un autre papier).
+    # stub=false means this paper is complete, even if it was previously
+    # created as a cited reference by another paper.
     client.run_write(
         """
         MERGE (p:Paper {arxiv_id: $arxiv_id})
@@ -42,7 +42,7 @@ def upsert_paper(client: Neo4jClient, paper: dict) -> None:
 
 
 def add_citation(client: Neo4jClient, source_arxiv_id: str, target: dict) -> None:
-    """Ajoute (source)-[:CITES]->(cible). La cible est créée en "stub" si inconnue."""
+    """Add (source)-[:CITES]->(target). Create the target as a stub if it is unknown."""
     client.run_write(
         """
         MATCH (s:Paper {arxiv_id: $source_id})
@@ -57,7 +57,7 @@ def add_citation(client: Neo4jClient, source_arxiv_id: str, target: dict) -> Non
 
 
 def get_graph_stats(client: Neo4jClient) -> dict:
-    """Compteurs affichés dans la barre latérale."""
+    """Return counters displayed in the sidebar."""
     return client.run_read(
         """
         CALL { MATCH (p:Paper) WHERE p.stub = false RETURN count(p) AS papers }
