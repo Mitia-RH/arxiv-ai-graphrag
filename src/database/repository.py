@@ -96,3 +96,34 @@ def get_graph_stats(client: Neo4jClient) -> dict:
         RETURN papers, stubs, authors, citations
         """
     )[0]
+
+
+def get_top_pagerank(client: Neo4jClient, n: int) -> list[dict]:
+    """Return the `n` papers with the highest computed PageRank scores."""
+    if n < 0:
+        raise ValueError("n must be non-negative")
+    return client.run_read(
+        """
+        MATCH (p:Paper)
+        WHERE p.pagerank IS NOT NULL
+        RETURN p.arxiv_id AS arxiv_id, p.title AS title, p.pagerank AS pagerank
+        ORDER BY p.pagerank DESC, p.arxiv_id
+        LIMIT $n
+        """,
+        n=n,
+    )
+
+
+def get_community_summary(client: Neo4jClient) -> list[dict]:
+    """Return each computed community's size and three most-cited paper titles."""
+    return client.run_read(
+        """
+        MATCH (p:Paper)
+        WHERE p.community IS NOT NULL
+        WITH p.community AS community_id, p
+        ORDER BY coalesce(p.citation_count, 0) DESC, p.title ASC
+        WITH community_id, count(p) AS size, collect(p.title)[0..3] AS top_cited_titles
+        RETURN community_id, size, top_cited_titles
+        ORDER BY size DESC, community_id
+        """
+    )

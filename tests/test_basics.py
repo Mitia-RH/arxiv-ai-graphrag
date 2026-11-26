@@ -6,12 +6,18 @@ from typing import Any
 import pytest
 import requests
 
+from src.database.analytics import compute_analytics
 from src.database.neo4j_client import Neo4jClient
+from src.database.repository import (
+    add_citations,
+    get_community_summary,
+    get_top_pagerank,
+    upsert_paper,
+)
 from src.database.schema import CONSTRAINTS, INDEXES, create_schema
 from src.ingestion.arxiv_fetcher import clean_arxiv_id
 from src.ingestion.citation_enricher import arxiv_id_from_doi
 from src.ingestion import backfill_embeddings, pipeline
-from src.database.repository import add_citations, upsert_paper
 from src.llm.graph_rag import CYPHER_SYSTEM_PROMPT, clean_cypher, is_read_only
 from src.llm import llm_client
 
@@ -324,3 +330,54 @@ def test_upsert_paper_sets_embedding_only_when_present():
     query, params = calls[1]
     assert "p.embedding = $embedding" in query
     assert params["embedding"] == paper["embedding"]
+
+
+def test_compute_analytics_projects_writes_and_drops_graphs():
+    calls = []
+
+    class FakeClient:
+        def run_write(self, query: str, **params: Any) -> list[dict]:
+            calls.append((query, params))
+            return []
+
+    compute_analytics(FakeClient())
+
+    assert len(calls) == 6
+    assert "{CITES: {orientation: 'NATURAL'}}" in calls[0][0]
+    assert "gds.pageRank.write" in calls[1][0]
+    assert "writeProperty: 'pagerank'" in calls[1][0]
+    assert calls[1][1] == {"graph_name": "cit"}
+    assert "{CITES: {orientation: 'UNDIRECTED'}}" in calls[2][0]
+    assert "gds.leiden.write" in calls[3][0]
+    assert "writeProperty: 'community'" in calls[3][0]
+    assert calls[3][1] == {"graph_name": "cit_undirected"}
+    assert [params["graph_name"] for _, params in calls[4:]] == [
+        "cit_undirected",
+        "cit",
+    ]
+    assert all("gds.graph.drop($graph_name, false)" in query for query, _ in calls[4:])
+
+
+def test_repository_analytics_queries_are_database_free():
+    calls = []
+
+    class FakeClient:
+        def run_read(self, query: str, **params: Any) -> list[dict]:
+            calls.append((query, params))
+            return [{"sample": True}]
+
+    client = FakeClient()
+
+    assert get_top_pagerank(client, 5) == [{"sample": True}]
+    assert calls[0][1] == {"n": 5}
+    assert "p.pagerank IS NOT NULL" in calls[0][0]
+    assert "ORDER BY p.pagerank DESC" in calls[0][0]
+
+    assert get_community_summary(client) == [{"sample": True}]
+    assert "collect(p.title)[0..3] AS top_cited_titles" in calls[1][0]
+    assert "ORDER BY coalesce(p.citation_count, 0) DESC" in calls[1][0]
+    assert calls[1][1] == {}
+
+    with pytest.raises(ValueError, match="non-negative"):
+        get_top_pagerank(client, -1)
+    assert len(calls) == 2

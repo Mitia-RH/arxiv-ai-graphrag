@@ -8,6 +8,8 @@ services:
       - "7687:7687"   # Bolt (used by Python).
     environment:
       NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-changeme123}
+      # The first start downloads the Graph Data Science plugin.
+      NEO4J_PLUGINS: '["graph-data-science"]'
     volumes:
       - neo4j_data:/data
       - neo4j_logs:/logs

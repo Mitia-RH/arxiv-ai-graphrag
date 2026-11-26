@@ -59,6 +59,26 @@ streamlit run app.py
 Try asking: *"Which papers are cited the most?"* The **View the Cypher query and raw data**
 section below each answer lets you inspect the results and verify the response.
 
+## Graph analytics
+
+Neo4j starts with the Graph Data Science (GDS) plugin configured; the first container
+start downloads it. After ingestion, compute PageRank scores and Leiden communities with:
+
+```bash
+python -m src.database.analytics
+```
+
+The results are written to `Paper.pagerank` and `Paper.community`. The repository helpers
+`get_top_pagerank(client, n)` and `get_community_summary(client)` retrieve the rankings and
+community sizes with their three most-cited titles. These database procedures are invoked
+only by application code through `client.run_write`, not by LLM-generated Cypher.
+
+This project uses the GDS Community Edition with Neo4j Community Edition. GDS Community
+Edition limits algorithm concurrency to four; the graph projections also need to fit in
+available memory. Higher GDS concurrency requires an Enterprise Edition license. See the
+[GDS system requirements](https://neo4j.com/docs/graph-data-science/current/installation/System-requirements/)
+and [Docker installation guide](https://neo4j.com/docs/graph-data-science/current/installation/installation-docker/).
+
 ## Tests
 
 ```bash
@@ -83,4 +103,4 @@ python -m pytest
 ## Project structure
 
 `config.py` · `src/ingestion/` (arXiv, OpenAlex, pipeline) · `src/database/` (client, schema,
-repository) · `src/llm/` (Ollama, GraphRAG) · `app.py` (Streamlit) · `tests/`
+repository, analytics) · `src/llm/` (Ollama, GraphRAG) · `app.py` (Streamlit) · `tests/`
