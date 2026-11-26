@@ -30,16 +30,19 @@ ollama pull qwen3:4b
 
 To use a different Ollama model, download it and update `OLLAMA_MODEL` in `.env`.
 
-## 3. Install dependencies and ingest papers
+## 3. Ingérer
 
 ```bash
 conda env create -f environment.yml
 conda activate arxiv-ai-graphrag
-python -m src.ingestion.pipeline --limit 50
+python -m src.ingestion.pipeline --limit 50 --offset 0
 ```
 
-Activate the environment in each new terminal. Ingestion can be rerun at any time:
-`MERGE` prevents duplicates.
+`--limit` sets the number of papers to fetch, and `--offset` selects where to start in
+arXiv's results. Increase the offset to ingest older batches (for example, use `--offset
+50` for the next 50 results). Papers already ingested as full papers are skipped; use
+`--force` to re-ingest them. Cited-paper stubs do not count as already ingested.
+Activate the environment in each new terminal.
 
 ## 4. Launch the app
 

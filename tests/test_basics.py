@@ -1,8 +1,11 @@
 """Basic tests for ID cleanup, Cypher cleanup, and read-only query safety.
 Run with: python -m pytest
 """
+import pytest
+
 from src.ingestion.arxiv_fetcher import clean_arxiv_id
 from src.ingestion.citation_enricher import arxiv_id_from_doi
+from src.ingestion import pipeline
 from src.llm.graph_rag import clean_cypher, is_read_only
 
 
@@ -40,3 +43,44 @@ def test_read_only_rejects_writes():
     assert not is_read_only("CREATE (p:Paper {arxiv_id: '1'})")
     assert not is_read_only("MATCH (p:Paper) RETURN p; MATCH (a) DELETE a")
     assert not is_read_only("Here is the query: MATCH (p) RETURN p")
+
+
+@pytest.mark.parametrize(
+    ("force", "expected_enriched"),
+    [(False, ["stub"]), (True, ["existing", "stub"])],
+)
+def test_pipeline_skips_existing_papers_but_not_stubs_unless_forced(
+    monkeypatch, force, expected_enriched
+):
+    papers = [
+        {"arxiv_id": "existing", "title": "Already ingested", "references": []},
+        {"arxiv_id": "stub", "title": "Only a stub", "references": []},
+    ]
+    enriched_ids = []
+    read_calls = []
+
+    class FakeClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            pass
+
+        def run_read(self, query, **params):
+            read_calls.append(True)
+            assert params["ids"] == ["existing", "stub"]
+            return [{"arxiv_id": "existing"}]
+
+    monkeypatch.setattr(pipeline, "fetch_papers", lambda limit, offset=0: papers)
+    monkeypatch.setattr(pipeline, "Neo4jClient", FakeClient)
+    monkeypatch.setattr(pipeline, "create_schema", lambda client: None)
+    monkeypatch.setattr(
+        pipeline,
+        "enrich_paper",
+        lambda paper: enriched_ids.append(paper["arxiv_id"]) or paper,
+    )
+    monkeypatch.setattr(pipeline, "upsert_paper", lambda client, paper: None)
+
+    assert pipeline.run(limit=2, force=force) == len(expected_enriched)
+    assert enriched_ids == expected_enriched
+    assert len(read_calls) == (0 if force else 1)

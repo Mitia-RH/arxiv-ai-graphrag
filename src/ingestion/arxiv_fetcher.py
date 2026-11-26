@@ -14,8 +14,8 @@ def clean_arxiv_id(raw: str) -> str:
     return re.sub(r"v\d+$", "", raw)
 
 
-def fetch_papers(limit: int = config.MAX_PAPERS) -> list[dict]:
-    """Return the `limit` most recent cs.AI papers."""
+def fetch_papers(limit: int = config.MAX_PAPERS, offset: int = 0) -> list[dict]:
+    """Return `limit` cs.AI papers starting at `offset`."""
     import arxiv  # Import here so unit tests do not depend on this package.
 
     # arXiv requests no more than one request every three seconds.
@@ -26,7 +26,7 @@ def fetch_papers(limit: int = config.MAX_PAPERS) -> list[dict]:
         sort_by=arxiv.SortCriterion.SubmittedDate,
     )
     papers = []
-    for r in client.results(search):
+    for r in client.results(search, offset=offset):
         papers.append({
             "arxiv_id": clean_arxiv_id(r.get_short_id()),
             "title": " ".join(r.title.split()),

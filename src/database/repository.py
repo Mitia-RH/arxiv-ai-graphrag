@@ -2,6 +2,22 @@
 from src.database.neo4j_client import Neo4jClient
 
 
+def get_existing_ids(client: Neo4jClient, ids: list[str]) -> set[str]:
+    """Return arXiv IDs that already exist as complete papers (not stubs)."""
+    if not ids:
+        return set()
+    rows = client.run_read(
+        """
+        UNWIND $ids AS arxiv_id
+        MATCH (p:Paper {arxiv_id: arxiv_id})
+        WHERE p.stub = false
+        RETURN p.arxiv_id AS arxiv_id
+        """,
+        ids=ids,
+    )
+    return {row["arxiv_id"] for row in rows}
+
+
 def upsert_paper(client: Neo4jClient, paper: dict) -> None:
     """Create or update a paper, its authors, and its categories.
 
