@@ -64,10 +64,15 @@ def show_details(msg: dict) -> None:
         st.json(msg["rows"])
 
 
+def show_route(msg: dict) -> None:
+    st.caption(f"Route: {msg.get('route', 'unknown')}")
+
+
 for msg in st.session_state.history:
     with st.chat_message(msg["role"]):
         st.write(msg["content"])
         if msg["role"] == "assistant":
+            show_route(msg)
             show_details(msg)
 
 if question := st.chat_input("e.g. Which papers discuss LLM agents?"):
@@ -79,9 +84,22 @@ if question := st.chat_input("e.g. Which papers discuss LLM agents?"):
             try:
                 res = graph_rag.ask(client, question)
             except Exception as error:  # For example, Ollama is unavailable.
-                res = {"answer": "", "cypher": "", "rows": [], "error": str(error)}
+                res = {
+                    "answer": "",
+                    "cypher": "",
+                    "rows": [],
+                    "error": str(error),
+                    "route": "error",
+                }
         text = res["answer"] or f"⚠️ {res['error']}"
         st.write(text)
-        msg = {"role": "assistant", "content": text, "cypher": res["cypher"], "rows": res["rows"]}
+        msg = {
+            "role": "assistant",
+            "content": text,
+            "cypher": res["cypher"],
+            "rows": res["rows"],
+            "route": res["route"],
+        }
+        show_route(msg)
         show_details(msg)
     st.session_state.history.append(msg)

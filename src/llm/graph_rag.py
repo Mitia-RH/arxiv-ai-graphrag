@@ -5,9 +5,11 @@ Each step is visible, and the generated Cypher is always returned for transparen
 import json
 import logging
 import re
+from typing import Any
 
 import config
 from src.llm.llm_client import chat, strip_thinking
+from src.llm.retrieval import hybrid_search
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +49,21 @@ Question: How many papers were published each year?
 MATCH (p:Paper) WHERE p.stub = false AND p.published_date IS NOT NULL RETURN substring(p.published_date, 0, 4) AS year, count(p) AS paper_count ORDER BY year DESC LIMIT 10
 """
 
-ANSWER_SYSTEM_PROMPT = """You are a scientific research assistant. Respond in English, in a few sentences,
-using ONLY the provided results. Cite paper titles and arXiv links.
+ANSWER_SYSTEM_PROMPT = """You are a scientific research assistant. The user may write in any language.
+Respond in the user's language, in a few sentences, using ONLY the provided results.
+Cite paper titles and arXiv links.
 If there are no results, simply say that no papers were found."""
+
+CLASSIFY_SYSTEM_PROMPT = """Classify the question with exactly ONE word:
+- structural: questions about graph structure or statistics, such as top authors, most cited papers,
+  counts, or who cites whom
+- topical: questions about papers on a subject or research topic
+Reply only with structural or topical."""
+
+SEARCH_TERMS_SYSTEM_PROMPT = """Prepare a search for scientific papers.
+Return only a JSON object with string fields "keywords" and "question_en".
+"keywords" must be an English Lucene query with useful synonyms joined by OR.
+"question_en" must be the user's question translated into English."""
 
 FORBIDDEN = re.compile(
     r"\b(CREATE|DELETE|DETACH|SET|MERGE|REMOVE|DROP|LOAD|FOREACH|CALL)\b", re.IGNORECASE
@@ -85,9 +99,67 @@ def _shrink(rows: list[dict]) -> str:
     return json.dumps(small, ensure_ascii=False, default=str)
 
 
-def ask(client, question: str) -> dict:
-    """Ask the graph a question. Return {answer, cypher, rows, error}."""
-    result = {"answer": "", "cypher": "", "rows": [], "error": None}
+def classify_question(question: str) -> str:
+    """Choose structural graph queries or topical paper retrieval."""
+    answer = chat(CLASSIFY_SYSTEM_PROMPT, f"Question: {question}").strip().lower()
+    return answer if answer in {"structural", "topical"} else "topical"
+
+
+def extract_search_terms(question: str) -> dict[str, str]:
+    """Extract English Lucene keywords and an English translation of the question."""
+    raw_output = chat(SEARCH_TERMS_SYSTEM_PROMPT, f"Question: {question}")
+    text = strip_thinking(raw_output)
+    object_start = text.find("{")
+    if object_start >= 0:
+        try:
+            parsed, _ = json.JSONDecoder().raw_decode(text[object_start:])
+        except json.JSONDecodeError:
+            pass
+        else:
+            if (
+                isinstance(parsed, dict)
+                and isinstance(parsed.get("keywords"), str)
+                and parsed["keywords"].strip()
+                and isinstance(parsed.get("question_en"), str)
+                and parsed["question_en"].strip()
+            ):
+                return {
+                    "keywords": parsed["keywords"],
+                    "question_en": parsed["question_en"],
+                }
+    return {"keywords": question, "question_en": question}
+
+
+def _answer_with_topical_search(
+    client: Any, question: str, result: dict[str, Any]
+) -> dict[str, Any]:
+    search_terms = extract_search_terms(question)
+    rows = hybrid_search(client, search_terms["keywords"], search_terms["question_en"])
+    result["route"] = "topical"
+    result["cypher"] = (
+        "Hybrid: full-text + vector\n"
+        f"Keywords: {search_terms['keywords']}\n"
+        f"Question (English): {search_terms['question_en']}"
+    )
+    result["rows"] = rows
+    result["answer"] = chat(
+        ANSWER_SYSTEM_PROMPT, f"Question: {question}\nResults: {_shrink(rows)}"
+    )
+    return result
+
+
+def ask(client: Any, question: str) -> dict[str, Any]:
+    """Ask the graph a question and return {answer, cypher, rows, error, route}."""
+    result: dict[str, Any] = {
+        "answer": "",
+        "cypher": "",
+        "rows": [],
+        "error": None,
+        "route": classify_question(question),
+    }
+
+    if result["route"] == "topical":
+        return _answer_with_topical_search(client, question, result)
 
     raw_output = chat(CYPHER_SYSTEM_PROMPT, f"Question: {question}")
     logger.debug("Raw LLM output: %s", raw_output)
@@ -117,6 +189,8 @@ def ask(client, question: str) -> dict:
             return result
 
     result["rows"] = rows
+    if not rows:
+        return _answer_with_topical_search(client, question, result)
     result["answer"] = chat(
         ANSWER_SYSTEM_PROMPT, f"Question: {question}\nResults: {_shrink(rows)}"
     )
