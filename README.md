@@ -26,9 +26,11 @@ Neo4j Browser: <http://localhost:7474> (credentials are in `.env`).
 
 ```bash
 ollama pull qwen3:4b
+ollama pull nomic-embed-text
 ```
 
-To use a different Ollama model, download it and update `OLLAMA_MODEL` in `.env`.
+To use a different chat model, download it and update `OLLAMA_MODEL` in `.env`. Set
+`EMBED_MODEL` there to select a different embedding model.
 
 ## 3. Ingest
 
@@ -43,6 +45,10 @@ arXiv's results. Increase the offset to ingest older batches (for example, use `
 50` for the next 50 results). Papers already ingested as full papers are skipped; use
 `--force` to re-ingest them. Cited-paper stubs do not count as already ingested.
 Activate the environment in each new terminal.
+
+To add embeddings to existing papers that were ingested before semantic search was
+enabled, run `python -m src.ingestion.backfill_embeddings`. Use `--limit` to cap the
+number of papers processed, for example `--limit 500`.
 
 ## 4. Launch the app
 

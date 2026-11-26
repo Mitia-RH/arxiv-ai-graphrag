@@ -21,17 +21,18 @@ def get_existing_ids(client: Neo4jClient, ids: list[str]) -> set[str]:
 def upsert_paper(client: Neo4jClient, paper: dict) -> None:
     """Create or update a paper, its authors, and its categories.
 
-    `paper`: arxiv_id, title, abstract, published_date, url,
-             authors (list[str]), categories (list[str]), citation_count (optional).
+    `paper`: arxiv_id, title, abstract, published_date, url, authors, categories,
+             optional citation_count and embedding.
     """
     # stub=false means this paper is complete, even if it was previously
     # created as a cited reference by another paper.
-    client.run_write(
-        """
+    embedding = paper.get("embedding")
+    embedding_set = ", p.embedding = $embedding" if embedding is not None else ""
+    query = """
         MERGE (p:Paper {arxiv_id: $arxiv_id})
         SET p.title = $title, p.abstract = $abstract,
             p.published_date = $published_date, p.url = $url,
-            p.citation_count = $citation_count, p.stub = false
+            p.citation_count = $citation_count, p.stub = false""" + embedding_set + """
         WITH p
         CALL {
             WITH p
@@ -49,12 +50,20 @@ def upsert_paper(client: Neo4jClient, paper: dict) -> None:
             RETURN count(*) AS categories_processed
         }
         RETURN p
-        """,
-        arxiv_id=paper["arxiv_id"], title=paper["title"], abstract=paper["abstract"],
-        published_date=paper["published_date"], url=paper["url"],
-        citation_count=paper.get("citation_count"), authors=paper["authors"],
-        categories=paper["categories"],
-    )
+        """
+    params = {
+        "arxiv_id": paper["arxiv_id"],
+        "title": paper["title"],
+        "abstract": paper["abstract"],
+        "published_date": paper["published_date"],
+        "url": paper["url"],
+        "citation_count": paper.get("citation_count"),
+        "authors": paper["authors"],
+        "categories": paper["categories"],
+    }
+    if embedding is not None:
+        params["embedding"] = embedding
+    client.run_write(query, **params)
 
 
 def add_citations(

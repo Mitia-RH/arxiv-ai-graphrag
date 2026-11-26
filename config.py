@@ -13,6 +13,8 @@ NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "")
 # --- Ollama (LLM local) ---
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:4b")
+EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
+EMBED_DIM = 768
 
 # --- Ingestion ---
 ARXIV_CATEGORY = "cs.AI"                         # Fixed project scope.

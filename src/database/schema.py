@@ -1,6 +1,7 @@
 """Uniqueness constraints. `IF NOT EXISTS` makes this safe to run repeatedly."""
 import logging
 
+import config
 from src.database.neo4j_client import Neo4jClient
 
 logger = logging.getLogger(__name__)
@@ -16,6 +17,11 @@ INDEXES = [
     "CREATE FULLTEXT INDEX paper_text IF NOT EXISTS FOR (p:Paper) ON EACH [p.title, p.abstract]",
     "CREATE INDEX paper_date IF NOT EXISTS FOR (p:Paper) ON (p.published_date)",
     "CREATE INDEX paper_citations IF NOT EXISTS FOR (p:Paper) ON (p.citation_count)",
+    (
+        "CREATE VECTOR INDEX paper_embedding IF NOT EXISTS FOR (p:Paper) ON (p.embedding) "
+        "OPTIONS {indexConfig: {`vector.dimensions`: "
+        f"{config.EMBED_DIM}, `vector.similarity_function`: 'cosine'}}"
+    ),
 ]
 
 

@@ -6,12 +6,15 @@ Usage : python -m src.ingestion.pipeline --limit 50 --offset 100
 import argparse
 import logging
 
+import requests
+
 import config
 from src.database.neo4j_client import Neo4jClient
 from src.database.repository import add_citations, get_existing_ids, upsert_paper
 from src.database.schema import create_schema
 from src.ingestion.arxiv_fetcher import fetch_papers
 from src.ingestion.citation_enricher import enrich_paper
+from src.llm.llm_client import embed
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +36,10 @@ def run(limit: int = config.MAX_PAPERS, offset: int = 0, force: bool = False) ->
         logger.info("Skipped %d papers already in the database.", skipped)
         for i, paper in enumerate(papers_to_process, start=1):
             paper = enrich_paper(paper)
+            try:
+                paper["embedding"] = embed(f"{paper['title']}. {paper['abstract']}")
+            except requests.RequestException as exc:
+                logger.warning("Could not embed paper %s: %s", paper["arxiv_id"], exc)
             upsert_paper(client, paper)
             if paper["references"]:
                 add_citations(client, paper["arxiv_id"], paper["references"])

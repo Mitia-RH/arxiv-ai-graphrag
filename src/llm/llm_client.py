@@ -35,6 +35,17 @@ def chat(system: str, user: str, temperature: float = 0.0) -> str:
     return strip_thinking(content)
 
 
+def embed(text: str) -> list[float]:
+    """Return an embedding from Ollama for the first 2000 characters of `text`."""
+    response = requests.post(
+        f"{config.OLLAMA_BASE_URL}/api/embed",
+        json={"model": config.EMBED_MODEL, "input": text[:2000]},
+        timeout=60,
+    )
+    response.raise_for_status()
+    return response.json()["embeddings"][0]
+
+
 def is_available() -> bool:
     """Return whether the Ollama server is responding."""
     try:
